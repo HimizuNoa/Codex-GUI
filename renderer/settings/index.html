@@ -1,0 +1,28 @@
+
+<!DOCTYPE html>
+<html><head>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; "><meta charset="utf-8"><title>Settings</title><style>
+body{font-family:sans-serif;padding:20px;}
+.warning{color:red;font-weight:bold;}
+</style></head>
+<body>
+<h2>Settings</h2>
+<label><input type="checkbox" id="auto"> Auto‑apply LLM patches (⚠️ Risky)</label>
+<p class="warning">⚠️ 自動パッチはコードを改変し、新たなバグや脆弱性を導入する恐れがあります。責任はユーザーが負います。</p>
+<button id="save">Save</button>
+<script>
+const { ipcRenderer } = window.electron;
+(async()=>{
+  const cfg=await ipcRenderer.invoke('get-user-settings');
+  document.getElementById('auto').checked=cfg.autoPatch;
+})();
+document.getElementById('save').addEventListener('click',async()=>{
+  const auto=document.getElementById('auto').checked;
+  
+  if(auto && !confirm('Auto-apply is HIGHLY risky and may break code. Proceed?')){return;}
+  await ipcRenderer.invoke('set-user-settings',{autoPatch:auto});
+
+  ipcRenderer.send('toast','Settings saved');
+});
+</script>
+</body></html>
