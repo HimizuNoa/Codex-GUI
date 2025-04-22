@@ -23,7 +23,18 @@ function listDiffs() {
     .sort((a,b)=>b.mtime - a.mtime);
 }
 
+// Ensure the path is within the diffs directory
+function isInside(p) {
+  return path.dirname(path.resolve(p)) === diffDir;
+}
+
+/**
+ * Load a diff file if it's inside the diffs directory
+ * @param {string} filePath
+ * @returns {string|null}
+ */
 function loadDiff(filePath) {
+  if (!isInside(filePath)) return null;
   try {
     return fs.readFileSync(filePath, 'utf-8');
   } catch {
@@ -32,9 +43,4 @@ function loadDiff(filePath) {
 }
 
 
-function isInside(p){return path.dirname(path.resolve(p))===diffDir;}
-function loadDiff(filePath){
-  if(!isInside(filePath)) return null;
-  try{return fs.readFileSync(filePath,'utf-8');}catch{return null;}
-}
 module.exports={ saveDiff, listDiffs, loadDiff };

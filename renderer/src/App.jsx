@@ -3,7 +3,8 @@ import DiffModal from './components/DiffModal';
 import DiffHistory from './components/DiffHistory';
 import { ToastProvider, ToastViewport, Toast } from '@radix-ui/react-toast';
 
-const { ipcRenderer } = window.electron;
+// Use the exposed API from preload
+const { invoke, onToast, onKeyStatus, listDiffs } = window.electron;
 
 function App() {
   const [prompt, setPrompt] = useState('');
@@ -18,32 +19,23 @@ function App() {
 
   // toast
   const [toastMsg, setToastMsg] = useState('');
+  // API key status
+  const [hasKey, setHasKey] = useState(false);
+  const [keyConfigured, setKeyConfigured] = useState(false);
 
   
   useEffect(() => {
-    window.electron.onToast((m)=>setToastMsg(m));
-    window.electron.onKeyStatus((v)=>setKeyConfigured(v));
-
-    
-
-  const setApiKey = async () => {
-    const key = prompt('Enter OpenAI API key');
-    if (!key) return;
-    const res = await ipcRenderer.invoke('set-api-key', key.trim());
-    if (res.success) {
-      setHasKey(true);
-      setToastMsg('API key saved');
-    } else {
-      setToastMsg(res.error);
-    }
-  };
+    // Listen for toast messages and key-status updates
+    onToast((msg) => setToastMsg(msg));
+    onKeyStatus((v) => setKeyConfigured(v));
+    // initial key status will be emitted by main after window loads
+  }, []);
 
   const handleRun = async () => {
-    
     setLoading(true);
     setOutput('');
     setReviewData(null);
-    const res = await ipcRenderer.invoke('run-codex', { prompt, mode });
+    const res = await invoke('run-codex', { prompt, mode });
     setLoading(false);
 
     if (res.success) {
@@ -68,10 +60,14 @@ function App() {
   return (
     <ToastProvider>
       <div className="container">
-        <h1>Codex GUI v10</h1><button onClick={()=>window.electron.invoke('open-settings')}>⚙️ Settings</button> <button onClick={()=>setShowHistory(true)}>🗂 Diff History</button><span>{keyConfigured? '🔑 Configured':'🔒 No Key'}</span>
+        <h1>Codex GUI v10</h1>
+        <button onClick={() => invoke('open-settings')}>⚙️ Settings</button>
+        <button onClick={() => setShowHistory(true)}>🗂 Diff History</button>
+        <span>{keyConfigured ? '🔑 Configured' : '🔒 No Key'}</span>
 
+        {/* Key change currently opens onboarding window */}
         <div className="key-section">
-          <button onClick={/* key set removed */}>
+          <button onClick={() => invoke('open-onboarding')}>
             {hasKey ? '🔑 Change API key' : '🔑 Set API key'}
           </button>
         </div>

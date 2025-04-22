@@ -71,6 +71,16 @@ function createMainWindow() {
       ? 'http://localhost:5173'
       : `file://${path.join(__dirname, '../dist/index.html')}`
   );
+  // Send initial API key status to renderer
+  mainWin.webContents.on('did-finish-load', async () => {
+    try {
+      const stored = await keytar.getPassword(KEYTAR_SERVICE, KEYTAR_ACCOUNT);
+      mainWin.webContents.send('key-status', !!stored);
+    } catch (err) {
+      console.error('Error fetching API key status:', err);
+      mainWin.webContents.send('key-status', false);
+    }
+  });
 }
 
 
@@ -126,4 +136,93 @@ ipcMain.handle('get-diff', (_ , filePath) => {
   const data=loadDiff(filePath);
   if(!data) return {error:'E_PATH'};
   return {data};
+});
+// ---------- API Key Onboarding ----------
+// Open the onboarding window for setting/changing API key
+ipcMain.handle('open-onboarding', () => {
+  const win = new BrowserWindow({
+    width: 640,
+    height: 400,
+    resizable: false,
+    modal: true,
+    parent: mainWin,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+  win.loadURL(`file://${path.join(__dirname, '../renderer/onboarding/index.html')}`);
+  // Close and notify on completion
+  ipcMain.once('onboarding-complete', () => {
+    if (!win.isDestroyed()) win.close();
+    if (mainWin && mainWin.webContents) {
+      mainWin.webContents.send('key-status', true);
+    }
+  });
+});
+// ---------- Run Codex CLI ----------
+// Handle execution, security scan, review, and optional auto-patch
+ipcMain.handle('run-codex', async (_, { prompt, mode }) => {
+  // Validate mode
+  if (!MODE_OPTIONS.includes(mode)) {
+    return { success: false, error: 'Invalid mode.' };
+  }
+  // Validate prompt
+  const validation = validatePrompt(prompt);
+  if (!validation.ok) {
+    return { success: false, error: validation.error };
+  }
+  // Retrieve API key
+  let apiKey;
+  try {
+    apiKey = await keytar.getPassword(KEYTAR_SERVICE, KEYTAR_ACCOUNT);
+  } catch (err) {
+    console.error('Error retrieving API key:', err);
+  }
+  if (!apiKey) {
+    return { success: false, error: 'API key not set.' };
+  }
+  // Scan prompt for injection attacks
+  try {
+    const scan = await scanPrompt(prompt, apiKey);
+    if (!scan.safe) {
+      return { success: false, error: 'Unsafe prompt detected: ' + scan.issues.join('; ') };
+    }
+  } catch (err) {
+    console.error('Prompt scan failed:', err);
+    return { success: false, error: 'Prompt scan failed.' };
+  }
+  // Execute codex CLI
+  let outputStr;
+  try {
+    outputStr = await runCodex(mode, prompt, apiKey);
+  } catch (err) {
+    console.error('Codex execution failed:', err);
+    return { success: false, error: err.stderr || err.message || 'Codex execution failed.' };
+  }
+  // Review output for security issues
+  try {
+    const review = await reviewOutput(outputStr, apiKey);
+    if (!review.safe) {
+      // Save diff for history
+      saveDiff(review.diff);
+      const autoPatch = store.get('autoPatch');
+      if (autoPatch) {
+        return { success: true, data: review.patchedCode, autoPatched: true };
+      } else {
+        return {
+          warning: true,
+          issues: review.issues,
+          data: outputStr,
+          patchedCode: review.patchedCode,
+          diff: review.diff
+        };
+      }
+    }
+  } catch (err) {
+    console.error('Review output failed:', err);
+    // proceed with original output on review errors
+  }
+  return { success: true, data: outputStr };
 });

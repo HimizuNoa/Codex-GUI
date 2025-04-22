@@ -1,7 +1,8 @@
 import React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Diff, Hunk, parseDiff } from 'react-diff-viewer-continued';
-import 'react-diff-viewer-continued/dist/index.css';
+// Styles for diff viewer are not packaged; default styles will apply or include manually if needed
+// import 'react-diff-viewer-continued/dist/index.css';
 
 export default function DiffModal({ issues, original, patched, diff, onApply, onClose }) {
   const files = diff ? parseDiff(diff) : [];

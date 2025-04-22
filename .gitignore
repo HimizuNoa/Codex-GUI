@@ -1,0 +1,30 @@
+### Node modules ###
+/node_modules/
+
+### Build outputs ###
+/dist/
+
+### Diff history ###
+/diffs/
+
+### Coverage reports ###
+/coverage/
+
+### Logs ###
+*.log
+
+### Environment variables ###
+.env
+.env.local
+.env.*.local
+
+### OS artifacts ###
+.DS_Store
+Thumbs.db
+
+### IDE and editor ###
+.vscode/
+.idea/
+*.sublime*
+*.swp
+*~
