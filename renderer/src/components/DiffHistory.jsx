@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Diff, Hunk, parseDiff } from 'react-diff-viewer-continued';
+import { Box, VStack, Button, Text } from '@chakra-ui/react';
 
 export default function DiffHistory({ open, onClose }) {
   const [files, setFiles] = useState([]);
@@ -15,36 +15,56 @@ export default function DiffHistory({ open, onClose }) {
 
   const handleSelect = async (p) => {
     const txt = await window.electron.getDiff(p);
-    setContent(txt);
+    setContent(txt.data || '');
   };
 
+  // Render raw unified diff
   const renderDiff = () => {
-    if (!content) return null;
-    const parsed = parseDiff(content);
-    return parsed.map(file => (
-      <Diff key={file.newRevision} viewType="unified" diffType="modify">
-        {file.hunks.map(h => <Hunk key={h.content} hunk={h} />)}
-      </Diff>
-    ));
+    if (!content) return <Text>No diff selected.</Text>;
+    return (
+      <Box
+        as="pre"
+        fontFamily="monospace"
+        whiteSpace="pre-wrap"
+        overflowY="auto"
+        maxH="400px"
+        p={2}
+        bg="gray.50"
+        borderRadius="md"
+      >
+        {content}
+      </Box>
+    );
   };
 
   return (
     <Dialog.Root open={open} onOpenChange={onClose}>
-      <Dialog.Content className="modal">
-        <Dialog.Title>Diff History</Dialog.Title>
-        <div style={{display:'flex',gap:'1rem'}}>
-          <ul style={{width:'200px',maxHeight:'400px',overflow:'auto'}}>
-            {files.map(f=>(
-              <li key={f.path}>
-                <button onClick={()=>handleSelect(f.path)}>{new Date(f.mtime).toLocaleString()} — {f.name}</button>
-              </li>
+      <Dialog.Overlay />
+      <Dialog.Content aria-labelledby="diff-history-title" aria-describedby="diff-history-description">
+        <Dialog.Title id="diff-history-title">Diff History</Dialog.Title>
+        <Dialog.Description id="diff-history-description">
+          Browse and preview previously generated diffs.
+        </Dialog.Description>
+        <VStack align="stretch" spacing={4}>
+          <Box maxH="200px" overflowY="auto">
+            {files.map((f) => (
+              <Button
+                key={f.path}
+                variant="link"
+                onClick={() => handleSelect(f.path)}
+                whiteSpace="normal"
+                textAlign="left"
+                width="100%"
+              >
+                {new Date(f.mtime).toLocaleString()} — {f.name}
+              </Button>
             ))}
-          </ul>
-          <div style={{flex:1,maxHeight:'400px',overflow:'auto'}}>
-            {renderDiff()}
-          </div>
-        </div>
-        <Dialog.Close>Close</Dialog.Close>
+          </Box>
+          {renderDiff()}
+        </VStack>
+        <Dialog.Close asChild>
+          <Button mt={4}>Close</Button>
+        </Dialog.Close>
       </Dialog.Content>
     </Dialog.Root>
   );

@@ -6,7 +6,12 @@ const { OpenAI } = require('openai');
  * @param {string} apiKey
  * @returns {Promise<{safe:boolean, issues:string[]}>}
  */
+// Scan prompt for malicious content using user-configured LLM or default
 async function scanPrompt(prompt, apiKey) {
+  const Store = require('electron-store');
+  const store = new Store();
+  const config = require('../config');
+  const model = store.get('promptModel') || config.LLM_PROMPT_MODEL;
   const openai = new OpenAI({ apiKey });
   const messages = [
     {
@@ -16,22 +21,32 @@ async function scanPrompt(prompt, apiKey) {
     { role: "user", content: prompt }
   ];
   const completion = await openai.chat.completions.create({
-    model: require('../config').LLM_PROMPT_MODEL,
-    temperature: 0,
-    max_tokens: 256,
+    model: model,
+    // o4-mini does not support temperature=0; use default 1
+    temperature: 1,
+    max_completion_tokens: 256,
     messages
   });
+  // Attempt to extract JSON from possible markdown fences
+  const raw = completion.choices[0].message.content;
+  let jsonText = raw.trim()
+    // remove code fences like ```json or ```
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
   let result;
   try {
-    result = JSON.parse(completion.choices[0].message.content.trim());
-  } catch {
-    return { safe: false, issues: ["Unable to parse scanner response"] };
+    result = JSON.parse(jsonText);
+  } catch (err) {
+    console.warn('[scanPrompt] JSON parse failed, marking prompt unsafe. Response:', raw);
+    return { safe: false, issues: ['Unable to parse scanner response'], raw, messages };
   }
   // Validate response structure
   if (typeof result.safe !== 'boolean' || !Array.isArray(result.issues) || !result.issues.every(i => typeof i === 'string')) {
-    return { safe: false, issues: ["Invalid scanner response format"] };
+    return { safe: false, issues: ['Invalid scanner response format'], raw, messages };
   }
-  return result;
+  // Return structured result along with raw content and messages sent
+  return { safe: result.safe, issues: result.issues, raw, messages };
 }
 
 module.exports = { scanPrompt };

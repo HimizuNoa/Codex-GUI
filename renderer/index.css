@@ -1,2 +1,54 @@
+.shell-panel {
+  border: 1px solid #ccc;
+  padding: 0.5em;
+  margin-top: 1em;
+  background: #fafafa;
+}
+.shell-logs {
+  font-family: monospace;
+  white-space: pre-wrap;
+}
+.main-panel {
+  flex: 1;
+}
+.file-browser-panel {
+  background: #fafafa;
+}
 
 .spinner{margin:10px;font-size:24px;}
+
+/* Logs panel styling */
+.logs-panel {
+  border: 1px solid #ccc;
+  padding: 0.5em;
+  margin-top: 1em;
+  max-height: 150px;
+  overflow-y: auto;
+  background: #f9f9f9;
+}
+.logs-panel h3 {
+  margin: 0 0 0.5em;
+  font-size: 1em;
+}
+.logs {
+  font-family: monospace;
+  white-space: pre-wrap;
+}
+
+/* Unsafe prompt display */
+.prompt-error {
+  border: 1px solid #e00;
+  background-color: #ffecec;
+  padding: 1em;
+  margin-top: 1em;
+}
+.prompt-error h3 {
+  margin: 0 0 0.5em;
+  color: #900;
+  font-size: 1em;
+}
+.prompt-error-text {
+  width: 100%;
+  font-family: monospace;
+  white-space: pre-wrap;
+}

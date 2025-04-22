@@ -1,7 +1,11 @@
 const system = "You are a senior secure-coding auditor. Analyse the supplied code for high-severity issues. Respond strictly with JSON: {\"safe\": boolean, \"issues\": [\"string\"], \"patched\": \"string\"}";
 
 const { OpenAI } = require('openai');
-const { LLM_REVIEW_MODEL } = require('../config');
+const Store = require('electron-store');
+const config = require('../config');
+// Use dynamic model from user settings or default
+const store = new Store();
+const reviewModel = store.get('reviewModel') || config.LLM_REVIEW_MODEL;
 const diff = require('diff');
 
 /**
@@ -17,9 +21,10 @@ async function reviewCode(code, apiKey) {
     { role: 'user', content: code }
   ];
   const completion = await openai.chat.completions.create({
-    model: LLM_REVIEW_MODEL,
-    temperature: 0,
-    max_tokens: 1024,
+    model: reviewModel,
+    // some models may not accept temperature=0; use default 1
+    temperature: 1,
+    max_completion_tokens: 1024,
     messages
   });
   let parsed;

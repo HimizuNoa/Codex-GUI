@@ -9,9 +9,15 @@ export default function DiffModal({ issues, original, patched, diff, onApply, on
 
   return (
     <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
-      <Dialog.Content className="modal">
-        <Dialog.Title>Security Review Warning</Dialog.Title>
-        <p>The LLM reviewer detected issues:</p>
+      <Dialog.Content
+        className="modal"
+        aria-labelledby="security-review-title"
+        aria-describedby="security-review-description"
+      >
+        <Dialog.Title id="security-review-title">Security Review Warning</Dialog.Title>
+        <Dialog.Description id="security-review-description">
+          The LLM reviewer detected issues:
+        </Dialog.Description>
         <ul>
           {issues.map((iss, i) => (
             <li key={i}>{iss}</li>

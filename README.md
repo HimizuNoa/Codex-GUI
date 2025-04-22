@@ -8,8 +8,22 @@ Codex GUI is a desktop application built with Electron and React (using Vite) th
 - Diff Viewer: Visualize file changes and suggested code updates.
 - Code Review: Automatically review generated code for security issues via OpenAI.
 - Diff History: Save, browse, and export previous diffs.
-- Settings: Update or clear your API key at any time.
-- Cross-Platform: Works on macOS, Windows, and Linux.
+- Settings & Config: Manage API key and CLI flags; import/export `codex.config.json`.
+ - Cross-Platform: Works on macOS, Windows, and Linux.
+ - Configuration File Support: Import and export project settings via `codex.config.json` (autoPatch, CLI flags).
+
+## Keyboard Shortcuts
+- Ctrl+Enter: Run prompt
+- Esc: Clear prompt input
+- Ctrl+, : Open Settings
+- Ctrl+D: Open Diff History
+- Ctrl+R: Open Prompt History
+- Ctrl+H / F1: Open CLI Help
+
+## Accessibility
+- All interactive elements include ARIA labels for screen reader support.
+- Modals use Chakra UI / Radix Dialog with built-in focus trapping and keyboard navigation.
+- High-contrast compatible themes and focus indicators enabled.
 
 ## Prerequisites
 - Node.js (v16 or higher)
