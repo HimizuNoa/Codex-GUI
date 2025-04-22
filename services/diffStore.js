@@ -23,20 +23,30 @@ function listDiffs() {
     .sort((a,b)=>b.mtime - a.mtime);
 }
 
-// Ensure the path is within the diffs directory
+// Ensure the path is within the diffs directory (avoid path traversal)
 function isInside(p) {
-  return path.dirname(path.resolve(p)) === diffDir;
-}
+  const resolved = path.resolve(p);
+  const relative = path.relative(diffDir, resolved);
+  // Outside if relative path starts with '..' or is absolute
+  return !relative.startsWith('..') && !path.isAbsolute(relative);
 
 /**
- * Load a diff file if it's inside the diffs directory
- * @param {string} filePath
+ * Load a diff file by name or full path if it's inside the diffs directory.
+ * @param {string} fileNameOrPath
  * @returns {string|null}
  */
-function loadDiff(filePath) {
-  if (!isInside(filePath)) return null;
+function loadDiff(fileNameOrPath) {
+  // Determine resolved path: use basename or absolute
+  let resolved;
+  if (fileNameOrPath === path.basename(fileNameOrPath)) {
+    resolved = path.join(diffDir, fileNameOrPath);
+  } else {
+    resolved = path.resolve(fileNameOrPath);
+  }
+  // Validate location and existence
+  if (!isInside(resolved) || !fs.existsSync(resolved)) return null;
   try {
-    return fs.readFileSync(filePath, 'utf-8');
+    return fs.readFileSync(resolved, 'utf-8');
   } catch {
     return null;
   }

@@ -85,7 +85,17 @@ function createMainWindow() {
 
 
 async function ensureApiKey() {
-  const stored = await keytar.getPassword(KEYTAR_SERVICE, KEYTAR_ACCOUNT);
+  // Check if key is stored in system keytar
+  let stored = await keytar.getPassword(KEYTAR_SERVICE, KEYTAR_ACCOUNT);
+  // If not stored, but environment variable provided, save it and proceed
+  if (!stored && process.env.OPENAI_API_KEY) {
+    try {
+      await keytar.setPassword(KEYTAR_SERVICE, KEYTAR_ACCOUNT, process.env.OPENAI_API_KEY.trim());
+      stored = process.env.OPENAI_API_KEY.trim();
+    } catch (err) {
+      console.error('Failed to save API key from environment variable:', err);
+    }
+  }
   if (stored) return true;
 
   return new Promise((resolve) => {

@@ -28,7 +28,11 @@ async function reviewCode(code, apiKey) {
   } catch (err) {
     return { safe: false, issues: ['Unable to parse code reviewer response'], patchedCode: code, diff: '' };
   }
+  // Validate response structure
   const { safe, issues, patched } = parsed;
+  if (typeof safe !== 'boolean' || !Array.isArray(issues) || !issues.every(i => typeof i === 'string') || typeof patched !== 'string') {
+    return { safe: false, issues: ['Invalid reviewer response format'], patchedCode: code, diff: '' };
+  }
   if (!safe) {
     const diffText = diff.createPatch('code.patch', code, patched);
     return { safe, issues, patchedCode: patched, diff: diffText };

@@ -1,5 +1,5 @@
 {
-  "name": "codex-gui-v5",
+  "name": "codex-gui",
   "version": "5.0.0",
   "main": "main/index.js",
   "scripts": {
@@ -34,7 +34,7 @@
   },
   "build": {
     "appId": "com.example.codexgui",
-    "productName": "CodexGUI",
+    "productName": "Codex GUI",
     "files": [
       "**/*"
     ],

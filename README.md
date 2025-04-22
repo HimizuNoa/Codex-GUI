@@ -1,6 +1,6 @@
-# Codex CLI GUI v5
+# Codex GUI
 
-Codex CLI GUI v5 is a desktop application built with Electron and React (using Vite) that provides a graphical interface to the Codex command-line tool and the OpenAI API. It enables you to write prompts, view code diffs, perform security reviews, and manage diff history—all within a modern, cross-platform desktop app.
+Codex GUI is a desktop application built with Electron and React (using Vite) that provides a graphical interface to the Codex command-line tool and the OpenAI API. It enables you to write prompts, view code diffs, perform security reviews, and manage diff history—all within a modern, cross-platform desktop app.
 
 ## Features
 - Onboarding: Securely store and manage your OpenAI API key using the system credential store (`keytar`).
@@ -19,8 +19,8 @@ Codex CLI GUI v5 is a desktop application built with Electron and React (using V
 ## Installation
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-org/codex-gui-v5.git
-   cd codex-gui-v5
+   git clone https://github.com/your-org/codex-gui.git
+   cd codex-gui
    ```
 2. Install dependencies:
    ```bash

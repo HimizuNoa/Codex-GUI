@@ -21,11 +21,17 @@ async function scanPrompt(prompt, apiKey) {
     max_tokens: 256,
     messages
   });
+  let result;
   try {
-    return JSON.parse(completion.choices[0].message.content.trim());
+    result = JSON.parse(completion.choices[0].message.content.trim());
   } catch {
     return { safe: false, issues: ["Unable to parse scanner response"] };
   }
+  // Validate response structure
+  if (typeof result.safe !== 'boolean' || !Array.isArray(result.issues) || !result.issues.every(i => typeof i === 'string')) {
+    return { safe: false, issues: ["Invalid scanner response format"] };
+  }
+  return result;
 }
 
 module.exports = { scanPrompt };

@@ -32,3 +32,16 @@
   - Verified `npm run dev` (with dummy API key) and `npm run build` + `npm start` launch Electron without errors.
   - Updated `README.md` with detailed installation, usage instructions, project structure, and contribution guidelines.
   - Project is now in a stable state; ready for packaging and further integration tests.
+
+### 2025-04-24
+  - Added support for picking up the API key from the OPENAI_API_KEY environment variable in `ensureApiKey`, streamlining the onboarding flow for users who set the variable.
+  - Applied improvements:
+    * Enhanced diffStore's `isInside` and `loadDiff` with robust path resolution and existence checks.
+    * Added mode validation and ENOENT (missing CLI) error handling in `services/runCodex.js`.
+    * Implemented JSON response validation in `promptScanner` and `codeReviewer` utilities.
+  - Next steps:
+    1. Test onboarding flow with and without the environment variable set.
+    2. Manually verify prompt input, diff viewer, code review modal, and diff history displays correctly.
+    3. Ensure settings (autoPatch toggle) persists and applies as expected.
+    4. Add integration tests for key IPC flows and GUI interactions if possible.
+    5. Address any UI/UX bugs found during testing.
