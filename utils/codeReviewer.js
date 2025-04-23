@@ -1,6 +1,7 @@
 const system = "You are a senior secure-coding auditor. Analyse the supplied code for high-severity issues. Respond strictly with JSON: {\"safe\": boolean, \"issues\": [\"string\"], \"patched\": \"string\"}";
 
-const { OpenAI } = require('openai');
+// OpenAI SDK default export for CJS
+const OpenAI = require('openai');
 const Store = require('electron-store');
 const config = require('../config');
 // Use dynamic model from user settings or default

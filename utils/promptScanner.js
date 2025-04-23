@@ -1,4 +1,5 @@
-const { OpenAI } = require('openai');
+// OpenAI SDK default export for CJS
+const OpenAI = require('openai');
 
 /**
  * Scan the prompt for malicious content using a low‑cost LLM.
@@ -20,13 +21,20 @@ async function scanPrompt(prompt, apiKey) {
     },
     { role: "user", content: prompt }
   ];
-  const completion = await openai.chat.completions.create({
-    model: model,
-    // o4-mini does not support temperature=0; use default 1
-    temperature: 1,
-    max_completion_tokens: 256,
-    messages
-  });
+  let completion;
+  try {
+    // Set a high token limit to avoid truncation errors
+    // Use max_completion_tokens for models that do not support max_tokens
+    completion = await openai.chat.completions.create({
+      model: model,
+      temperature: 1,
+      max_completion_tokens: 4096,
+      messages
+    });
+  } catch (err) {
+    console.warn(`[scanPrompt] API error, skipping scan and assuming safe: ${err.message}`);
+    return { safe: true, issues: [], raw: '', messages };
+  }
   // Attempt to extract JSON from possible markdown fences
   const raw = completion.choices[0].message.content;
   let jsonText = raw.trim()

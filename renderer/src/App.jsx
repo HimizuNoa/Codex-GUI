@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import Editor from '@monaco-editor/react';
 import DiffModal from './components/DiffModal';
 import DiffHistory from './components/DiffHistory';
 import PromptHistory from './components/PromptHistory';
@@ -10,6 +11,8 @@ import ContextModal from './components/ContextModal';
 import MemoryModal from './components/MemoryModal';
 import { parsePatch, applyPatch } from 'diff';
 import {
+  Grid,
+  GridItem,
   Flex,
   Box,
   Text,
@@ -22,8 +25,18 @@ import {
   Heading,
   useColorMode,
   SlideFade,
+  CloseButton,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  ModalCloseButton,
+  Tooltip
 } from '@chakra-ui/react';
 import { fuzzyMatch } from './utils/searchUtils';
+import PromptModal from './components/PromptModal';
 // Use the exposed API from preload
 const {
   invoke,
@@ -40,6 +53,7 @@ const {
   executeShell,
   onShellLog,
   onShellExit
+  , onCliPrompt, respondCliPrompt
 } = window.electron;
 
 function App() {
@@ -49,9 +63,14 @@ function App() {
   const [loading, setLoading] = useState(false);
   // Chat messages: { type: 'user' | 'bot', text }
   const [logs, setLogs] = useState([]);
+  // UI language (for localization)
+  const [uiLanguage, setUiLanguage] = useState('en');
+  // CLI options (to get model name)
+  const [cliOptions, setCliOptions] = useState({ model: '' });
   // File browser state
   const [files, setFiles] = useState([]);
   const [selectedFile, setSelectedFile] = useState('');
+  const [openTabs, setOpenTabs] = useState([]);
   // Shell executor state
   const [shellCmd, setShellCmd] = useState('');
   const [shellLogs, setShellLogs] = useState([]);
@@ -74,12 +93,28 @@ function App() {
   const [showMemory, setShowMemory] = useState(false);
   // Settings modal state
   const [showSettings, setShowSettings] = useState(false);
+  // Interactive CLI prompt state
+  const [cliPrompt, setCliPrompt] = useState({ text: '', isOpen: false });
   // Refs for focus control
   const promptRef = useRef(null);
   const fileFilterRef = useRef(null);
+  // Determine Monaco language based on file extension
+  const fileLanguage = React.useMemo(() => {
+    const ext = selectedFile.split('.').pop();
+    switch (ext) {
+      case 'js': return 'javascript';
+      case 'ts': return 'typescript';
+      case 'html': return 'html';
+      case 'css': return 'css';
+      default: return 'plaintext';
+    }
+  }, [selectedFile]);
   // Help modal state
   const [showHelp, setShowHelp] = useState(false);
   const [helpText, setHelpText] = useState('');
+  // Injection guidance modal state
+  const [showInjection, setShowInjection] = useState(false);
+  const [agentMsg, setAgentMsg] = useState('');
   // File filter state
   const [fileFilter, setFileFilter] = useState('');
   // Interactive edit diff state
@@ -105,6 +140,10 @@ function App() {
     // Subscribe to run logs
     // Receive streaming logs from main process (bot messages)
     onRunLog((msg) => setLogs((prev) => [...prev, { type: 'bot', text: msg }]));
+    // Load UI language preference
+    invoke('get-ui-language').then((lang) => setUiLanguage(lang));
+    // Load CLI options (model name)
+    invoke('get-cli-options').then((opts) => setCliOptions(opts));
     // Subscribe to shell logs
     onShellLog((log) => setShellLogs((prev) => [...prev, log]));
     onShellExit((code) => {
@@ -113,6 +152,8 @@ function App() {
     });
     // Load file list initially
     listFiles().then((list) => setFiles(list));
+    // Subscribe to interactive CLI prompts
+    onCliPrompt((promptText) => setCliPrompt({ text: promptText, isOpen: true }));
   }, []);
   // Load prompt history when opening history modal
   useEffect(() => {
@@ -200,42 +241,49 @@ function App() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  const handleRun = async () => {
-    // Start new chat: clear previous messages and add user prompt
+  // Run Codex with optional skipScan flag
+  const runCodexHandler = async (skipScan = false) => {
     setLogs([{ type: 'user', text: prompt }]);
     setLoading(true);
     setOutput('');
     setReviewData(null);
     setErrorData(null);
+    setShowInjection(false);
+    setAgentMsg('');
     // Record prompt history
     invoke('add-prompt-history', { prompt, mode, timestamp: Date.now() });
-    const res = await invoke('run-codex', { prompt, mode, files: selectedFile ? [selectedFile] : [] });
+    const res = await invoke('run-codex', { prompt, mode, files: selectedFile ? [selectedFile] : [], skipScan });
     setLoading(false);
+    // Interactive edit mode
     if (res.edit) {
-      // Interactive edit diff
       setEditDiff(res.diff);
       return;
     }
-    setLoading(false);
-
+    // Injection detection: ask user via agent
+    if (res.injection) {
+      setAgentMsg(res.agentMsg);
+      setErrorData(res.scan);
+      setShowInjection(true);
+      return;
+    }
+    // Security review warning
+    if (res.warning) {
+      setReviewData(res);
+      return;
+    }
+    // Success path
     if (res.success) {
       setOutput(res.data);
       if (res.autoPatched) toast({ description: '⚠️ Auto‑patch was applied', status: 'warning', duration: 3000, isClosable: true });
-      // Refresh file list after run
+      // Refresh file list
       listFiles().then((list) => setFiles(list));
-    } else if (res.warning) {
-      // security review failed – show diff modal
-      setReviewData(res);
-    } else {
-      // Unsafe prompt or other error
-      if (res.scan) {
-        // Injection detected: show scan messages and raw response
-        setErrorData({ message: res.error, scan: res.scan });
-      } else {
-        toast({ description: res.error, status: 'error', duration: 3000, isClosable: true });
-      }
+      return;
     }
+    // Other errors
+    toast({ description: res.error || 'Error', status: 'error', duration: 3000, isClosable: true });
   };
+  const handleRun = () => runCodexHandler(false);
+  const handleProceedInjection = () => runCodexHandler(true);
 
   const handleApplyPatch = () => {
     if (reviewData && reviewData.patchedCode) {
@@ -288,9 +336,24 @@ function App() {
     // fuzzy fallback
     return files.filter((f) => fuzzyMatch(fileFilter, f));
   }, [files, fileFilter]);
-return (
-    <Flex className="container" flexDir="row" height="100vh">
-      <Box className="main-panel" flex="2" pr={4} overflowY="auto">
+  return (
+    <>
+      <PromptModal
+        isOpen={cliPrompt.isOpen}
+        promptText={cliPrompt.text}
+        onSubmit={(ans) => { respondCliPrompt(ans); setCliPrompt({ text: '', isOpen: false }); }}
+        onCancel={() => { respondCliPrompt(''); setCliPrompt({ text: '', isOpen: false }); }}
+      />
+      <Grid templateColumns="1fr 2fr 1fr" height="100vh">
+      {/* Left sidebar: Chat Panel */}
+      <GridItem p={4} overflowY="auto" bg="gray.50" borderRightWidth="1px" borderColor="gray.200">
+        <ChatPanel
+          messages={logs}
+          modelName={cliOptions.model || ''}
+          uiLanguage={uiLanguage}
+        />
+      </GridItem>
+      <GridItem p={4} overflowY="auto">
         {/* Header with title, theme toggle, settings */}
         <Flex align="center" justify="space-between" mb={4}>
           <Heading as="h1" size="lg">Codex GUI v10</Heading>
@@ -323,6 +386,7 @@ return (
           </Button>
         </div>
 
+        <Tooltip label={`CLI: codex ${mode} <prompt>`} fontSize="sm">
         <ChakraTextarea
           ref={promptRef}
           value={prompt}
@@ -338,6 +402,7 @@ return (
           focusBorderColor="blue.400"
           transition="border-color 0.2s ease"
         />
+        </Tooltip>
 
         <div className="controls">
           <select value={mode} onChange={(e) => setMode(e.target.value)}>
@@ -345,17 +410,14 @@ return (
             <option value="--edit">Edit</option>
             <option value="--chat">Chat</option>
           </select>
+          <Tooltip label={`Execute: codex ${mode} ${selectedFile ? selectedFile : '<all files>'}`} fontSize="sm">
           <Button colorScheme="blue" aria-label="Run Codex" onClick={handleRun} isLoading={loading}>
             Run Codex
           </Button>
+          </Tooltip>
         </div>
 
         {loading && <div className="spinner">⏳</div>}
-        {/* Logs panel */}
-        {/* Chat panel with streaming output */}
-        <Box className="chat-panel" h="300px" overflowY="auto" bg="gray.50" p={4} borderRadius="md">
-          <ChatPanel messages={logs} />
-        </Box>
         {/* Shell panel */}
         <Box className="shell-panel" mt={4}>
           <Text as="h3" fontSize="lg" mb={2}>Shell Executor</Text>
@@ -394,7 +456,31 @@ return (
         )}
 
         {/* Settings Modal */}
-        <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
+      <SettingsModal
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        uiLanguage={uiLanguage}
+        setUiLanguage={setUiLanguage}
+      />
+        {/* Injection Guidance Modal */}
+        <Modal isOpen={showInjection} onClose={() => setShowInjection(false)}>
+          <ModalOverlay />
+          <ModalContent>
+            <ModalHeader>プロンプト安全確認</ModalHeader>
+            <ModalCloseButton />
+            <ModalBody>
+              <Text whiteSpace="pre-wrap">{agentMsg}</Text>
+            </ModalBody>
+            <ModalFooter>
+              <Button colorScheme="blue" mr={3} onClick={() => { setShowInjection(false); handleProceedInjection(); }}>
+                続行
+              </Button>
+              <Button variant="ghost" onClick={() => setShowInjection(false)}>
+                キャンセル
+              </Button>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
         {/* CLI Help Modal */}
         <HelpModal isOpen={showHelp} onClose={() => setShowHelp(false)} helpText={helpText} />
         {/* Interactive Edit mode modal */}
@@ -447,9 +533,9 @@ return (
             )}
           </Box>
         )}
-      </Box>
+      </GridItem>
       {/* File Browser Panel */}
-      <Box className="file-browser-panel" flex="1" borderLeft="1px solid" borderColor="gray.200" pl={4} overflowY="auto">
+      <GridItem p={4} borderLeft="1px solid" borderColor="gray.200" overflowY="auto">
         <Text as="h3" fontSize="lg" mb={2}>Files</Text>
         <Input
           ref={fileFilterRef}
@@ -462,7 +548,7 @@ return (
             if (e.key === 'Escape') setFileFilter('');
           }}
         />
-        <VStack align="stretch" spacing={1} maxH="200px" overflowY="auto">
+          <VStack align="stretch" spacing={1} maxH="200px" overflowY="auto">
           {filteredFiles.map((f) => (
             <Button
               key={f}
@@ -470,7 +556,10 @@ return (
               justifyContent="flex-start"
               whiteSpace="normal"
               colorScheme={f === selectedFile ? 'blue' : 'gray'}
-              onClick={() => setSelectedFile(f)}
+              onClick={() => {
+                setSelectedFile(f);
+                setOpenTabs((tabs) => tabs.includes(f) ? tabs : [...tabs, f]);
+              }}
             >
               {f}
             </Button>
@@ -479,16 +568,48 @@ return (
         {selectedFile && (
           <Box mt={4}>
             <Text fontWeight="bold" mb={2}>Editing: {selectedFile}</Text>
-            <ChakraTextarea
-              fontFamily="mono"
-              height="300px"
+            {/* Open file tabs */}
+            {openTabs.length > 0 && (
+              <Flex mb={2}>
+                {openTabs.map((tab) => (
+                  <Button
+                    key={tab}
+                    size="sm"
+                    variant={tab === selectedFile ? 'solid' : 'outline'}
+                    mr={1}
+                    onClick={() => setSelectedFile(tab)}
+                  >
+                    {tab.split('/').pop()}
+                    <CloseButton
+                      size="sm"
+                      ml={1}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenTabs((tabs) => tabs.filter((t) => t !== tab));
+                        if (selectedFile === tab) {
+                          const remaining = openTabs.filter((t) => t !== tab);
+                          setSelectedFile(remaining[0] || '');
+                        }
+                      }}
+                    />
+                  </Button>
+                ))}
+              </Flex>
+            )}
+            {/* Monaco Editor */}
+            <Editor
+              height="60vh"
+              language={fileLanguage}
+              theme={colorMode === 'light' ? 'light' : 'vs-dark'}
               value={fileContent}
-              onChange={(e) => setFileContent(e.target.value)}
+              onChange={(value) => setFileContent(value || '')}
+              options={{ automaticLayout: true, minimap: { enabled: false } }}
             />
           </Box>
         )}
-      </Box>
-      </Flex>
+      </GridItem>
+    </Grid>
+  </>
   );
 }
 

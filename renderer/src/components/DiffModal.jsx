@@ -1,11 +1,12 @@
 import React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Diff, Hunk, parseDiff } from 'react-diff-viewer-continued';
+import { Diff, Hunk } from 'react-diff-viewer-continued';
+import { parsePatch } from 'diff';
 // Styles for diff viewer are not packaged; default styles will apply or include manually if needed
 // import 'react-diff-viewer-continued/dist/index.css';
 
 export default function DiffModal({ issues, original, patched, diff, onApply, onClose }) {
-  const files = diff ? parseDiff(diff) : [];
+  const files = diff ? parsePatch(diff) : [];
 
   return (
     <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
@@ -24,8 +25,8 @@ export default function DiffModal({ issues, original, patched, diff, onApply, on
           ))}
         </ul>
 
-        {files.map(({ hunks, oldRevision, newRevision }) => (
-          <Diff key={oldRevision + newRevision} viewType="unified" diffType="modify">
+        {files.map(({ hunks, oldFileName, newFileName }) => (
+          <Diff key={oldFileName + newFileName} viewType="unified" diffType="modify">
             {hunks.map((hunk) => (
               <Hunk key={hunk.content} hunk={hunk} />
             ))}

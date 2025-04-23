@@ -23,6 +23,9 @@ contextBridge.exposeInMainWorld('electron', {
   executeShell: (cmd, args) => ipcRenderer.send('exec-shell', cmd, args),
   onShellLog: (cb) => ipcRenderer.on('shell-log', (_, log) => cb(log)),
   onShellExit: (cb) => ipcRenderer.on('shell-exit', (_, code) => cb(code)),
+  // Interactive CLI prompt handling
+  onCliPrompt: (cb) => ipcRenderer.on('cli-prompt', (_, prompt) => cb(prompt)),
+  respondCliPrompt: (answer) => ipcRenderer.send('respond-cli-prompt', answer),
   deleteFile: (relPath) => ipcRenderer.invoke('delete-file', relPath),
   // Config file import/export
   importConfig: () => ipcRenderer.invoke('import-config'),
@@ -45,6 +48,9 @@ contextBridge.exposeInMainWorld('electron', {
   setLlmModels: (models) => ipcRenderer.invoke('set-llm-models', models),
   // Report false-positive prompt flagging
   reportPromptFlag: (args) => ipcRenderer.invoke('report-prompt-flag', args),
+  // UI language APIs
+  getUiLanguage: () => ipcRenderer.invoke('get-ui-language'),
+  setUiLanguage: (lang) => ipcRenderer.invoke('set-ui-language', lang),
 });
 // Expose onboarding IPC to renderer
 contextBridge.exposeInMainWorld('onboardAPI', {

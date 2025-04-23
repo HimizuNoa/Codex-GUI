@@ -52,7 +52,8 @@ describe('SettingsModal Integration', () => {
     expect(autoSwitch.getAttribute('aria-checked')).toBe('false');
     // Wait for CLI options to load into inputs
     await waitFor(() => {
-      expect(screen.getByLabelText(/Model/i).value).toBe(defaultCliOptions.model);
+      // Use placeholder to uniquely identify CLI model input
+      expect(screen.getByPlaceholderText(/Model name/i).value).toBe(defaultCliOptions.model);
       expect(screen.getByLabelText(/Temperature/i).value).toBe(defaultCliOptions.temperature.toString());
     });
   });

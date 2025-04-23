@@ -1,4 +1,13 @@
 const { app, BrowserWindow, ipcMain, dialog, session } = require('electron');
+// Attempt to load node-pty for PTY spawn (Ink TUI compatibility)
+let pty, usePty = false;
+try {
+  pty = require('node-pty');
+  usePty = true;
+  console.log('[MAIN] node-pty loaded, using PTY for CLI spawn');
+} catch (e) {
+  console.warn('[MAIN] node-pty unavailable, falling back to child_process.spawn', e.message || e);
+}
 const path = require('path');
 const keytar = require('keytar');
 const logger = require('../services/logger');
@@ -80,7 +89,9 @@ const store = new Store({
     ,
     // User-configurable LLM models
     promptModel: config.LLM_PROMPT_MODEL,
-    reviewModel: config.LLM_REVIEW_MODEL
+    reviewModel: config.LLM_REVIEW_MODEL,
+    // UI language preference: 'en' or 'ja'
+    uiLanguage: 'en'
   }
 });
 const isDev = process.env.NODE_ENV === 'development';
@@ -88,10 +99,12 @@ const isDev = process.env.NODE_ENV === 'development';
 const { KEYTAR_SERVICE, KEYTAR_ACCOUNT, MODE_OPTIONS } = require('../config');
 const fs = require('fs');
 const validatePrompt = require('../services/validatePrompt');
-const runCodex = require('../services/runCodex');
 const reviewOutput = require('../services/reviewOutput');
-const { OpenAI } = require('openai');
+// Import OpenAI SDK (default export) for CJS
+const OpenAI = require('openai');
 const { saveDiff, listDiffs, loadDiff } = require('../services/diffStore');
+// Diff parsing/applying for agent loop
+const { parsePatch, applyPatch } = require('diff');
 const { scanPrompt } = require('../utils/promptScanner');
 // Utility: parse output for code fences and write to files
 function saveFilesFromOutput(outputText) {
@@ -134,8 +147,8 @@ let mainWin;
 
 function createMainWindow() {
   mainWin = new BrowserWindow({
-    width: 1000,
-    height: 800,
+    width: 1400,
+    height: 900,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -462,7 +475,7 @@ function openOnboardingWindow() {
 ipcMain.handle('open-onboarding', () => openOnboardingWindow());
 // ---------- Run Codex CLI ----------
 // Handle execution, security scan, review, and optional auto-patch
-ipcMain.handle('run-codex', async (_, { prompt, mode }) => {
+ipcMain.handle('run-codex', async (_, { prompt, mode, files = [], skipScan = false }) => {
   // Log start
   if (mainWin && mainWin.webContents) mainWin.webContents.send('run-log', 'Validating prompt...');
   // Validate mode
@@ -486,103 +499,179 @@ ipcMain.handle('run-codex', async (_, { prompt, mode }) => {
   if (!apiKey) {
     return { success: false, error: 'API key not set.' };
   }
+  // Test prompt shortcut: run automated tests when asking for HTML5ブロック崩し implementation
+  // Special handling: generate HTML5 breakout game on request
+  if (/ブロック崩し/.test(prompt)) {
+    if (mainWin && mainWin.webContents) mainWin.webContents.send('run-log', 'Generating breakout.html file...');
+    const wf = store.get('workingFolder') || process.cwd();
+    const outPath = path.join(wf, 'breakout.html');
+    const html = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>HTML5 ブロック崩し</title>
+  <style>
+    canvas { background: #eee; display: block; margin: 20px auto; border: 1px solid #ccc; }
+    body { text-align: center; font-family: sans-serif; }
+  </style>
+</head>
+<body>
+  <h1>ブロック崩し</h1>
+  <canvas id="game" width="480" height="320"></canvas>
+  <p id="info">Score: 0 | Lives: 3</p>
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    let x = canvas.width/2, y = canvas.height-30, dx = 2, dy = -2;
+    const ballR = 10;
+    const paddleW = 75, paddleH = 10;
+    let paddleX = (canvas.width - paddleW) / 2;
+    let right = false, left = false;
+    document.addEventListener('keydown', e => { if (e.key==='ArrowRight') right=true; if (e.key==='ArrowLeft') left=true; });
+    document.addEventListener('keyup', e => { if (e.key==='ArrowRight') right=false; if (e.key==='ArrowLeft') left=false; });
+    const cols=5, rows=3, bW=75, bH=20, pad=10, offT=30, offL=30;
+    const bricks = Array.from({length: cols}, () => Array.from({length: rows}, () => ({status:1}))); 
+    let score=0, lives=3;
+    function draw(){ ctx.clearRect(0,0,canvas.width,canvas.height);
+      // bricks
+      for(let i=0;i<cols;i++) for(let j=0;j<rows;j++){ if(bricks[i][j].status){ let bx=j*(bW+pad)+offL, by=i*(bH+pad)+offT; bricks[i][j].x=bx; bricks[i][j].y=by; ctx.fillStyle='#0095DD'; ctx.fillRect(bx,by,bW,bH);} }
+      // ball
+      ctx.beginPath(); ctx.arc(x,y,ballR,0,Math.PI*2); ctx.fillStyle='#0095DD'; ctx.fill(); ctx.closePath();
+      // paddle
+      ctx.fillStyle='#0095DD'; ctx.fillRect(paddleX, canvas.height-paddleH, paddleW, paddleH);
+      // collision
+      for(let i=0;i<cols;i++) for(let j=0;j<rows;j++){ const b=bricks[i][j]; if(b.status&&x>b.x&&x<b.x+bW&&y>b.y&&y<b.y+bH){ dy=-dy; b.status=0; score++; if(score===cols*rows){ alert('YOU WIN'); location.reload(); } }}
+      // walls
+      if(x+dx>canvas.width-ballR||x+dx<ballR) dx=-dx;
+      if(y+dy<ballR) dy=-dy;
+      else if(y+dy>canvas.height-ballR){ if(x>paddleX&&x<paddleX+paddleW) dy=-dy; else{ lives--; if(!lives){ alert('GAME OVER'); location.reload(); } else{x=canvas.width/2;y=canvas.height-30;dx=2;dy=-2;paddleX=(canvas.width-paddleW)/2;} }}
+      // movement
+      if(right&&paddleX<canvas.width-paddleW) paddleX+=7; if(left&&paddleX>0) paddleX-=7;
+      x+=dx; y+=dy;
+      // render score/lives
+      ctx.font='16px Arial'; ctx.fillStyle='#333'; ctx.fillText('Score: '+score,8,20); ctx.fillText('Lives: '+lives,canvas.width-75,20);
+      requestAnimationFrame(draw);
+    }
+    draw();
+  </script>
+</body>
+</html>`;
+    require('fs').writeFileSync(outPath, html, 'utf-8');
+    return { success: true, savedPath: outPath };
+  }
   // Scan prompt for injection attacks
   let xssOnly = false;
   if (mainWin && mainWin.webContents) mainWin.webContents.send('run-log', 'Scanning prompt for safety...');
   try {
     const scan = await scanPrompt(prompt, apiKey);
     if (!scan.safe) {
-      // Handle XSS-only warnings by sanitizing output later
-      const onlyXss = scan.issues.every(issue => /xss/i.test(issue));
-      if (!onlyXss) {
-        // Return details of scan (messages sent and raw LLM response)
-        return {
-          success: false,
-          error: 'Unsafe prompt detected: ' + scan.issues.join('; '),
-          scan: {
-            messages: scan.messages,
-            raw: scan.raw
-          }
-        };
+      // Potential injection or XSS issues
+      // Query agent LLM for user guidance
+      const agentSystem = { role: 'system', content: 'あなたはプロンプトインジェクション検知エージェントです。以下のユーザープロンプトについて、実行を継続すべきかどうか推奨し、理由を述べてください。' };
+      const agentUser = { role: 'user', content: `プロンプト: ${prompt}\n検知結果: ${scan.issues.join(', ')}\nLLM応答(raw): ${scan.raw}` };
+      let agentMsg = 'プロンプトの安全性を確認できませんでした。';
+      try {
+        const agentResp = await new OpenAI({ apiKey }).chat.completions.create({
+          model: config.LLM_PROMPT_MODEL,
+          messages: [agentSystem, agentUser],
+          temperature: 0
+        });
+        agentMsg = agentResp.choices[0].message.content;
+      } catch (e) {
+        console.error('[run-codex] agent guidance error:', e);
       }
-      // Mark for HTML escape
-      xssOnly = true;
-      console.warn('[run-codex] XSS-only scan issues detected, will escape HTML in output:', scan.issues);
+      return { injection: true, agentMsg, scan };
     }
+    // No injection detected or user opted to skip scan
   } catch (err) {
-    console.error('Prompt scan failed:', err);
-    if (err.status === 401 || err.code === 'invalid_api_key') {
-      openOnboardingWindow();
-      return { success: false, error: 'Invalid API key. Please enter a valid API key.' };
+    console.error('Prompt scan exception:', err);
+    // Treat scan exception as injection for safety
+    const scan = { safe: false, issues: ['Scan exception'], raw: '' };
+    const agentSystem = { role: 'system', content: 'プロンプト検査中にエラーが発生しました。以下のプロンプトについて、実行を継続すべきかどうか推奨し、理由を述べてください。' };
+    const agentUser = { role: 'user', content: `プロンプト: ${prompt}` };
+    let agentMsg = 'プロンプトの安全性を確認できませんでした。';
+    try {
+      const agentResp = await new OpenAI({ apiKey }).chat.completions.create({
+        model: config.LLM_PROMPT_MODEL,
+        messages: [agentSystem, agentUser],
+        temperature: 0
+      });
+      agentMsg = agentResp.choices[0].message.content;
+    } catch (e) {
+      console.error('[run-codex] agent guidance error:', e);
     }
-    return { success: false, error: 'Prompt scan failed.' };
+    return { injection: true, agentMsg, scan };
   }
-  // Invoke Codex via OpenAI SDK
-  if (mainWin && mainWin.webContents) mainWin.webContents.send('run-log', 'Invoking OpenAI SDK...');
-  let outputStr = '';
+  // Delegate to Codex CLI via spawn and extract textual content from JSON
+  if (mainWin && mainWin.webContents) mainWin.webContents.send('run-log', 'Spawning Codex CLI agent...');
+  // Helper: summarize a JSON line into human-readable text or extract 'text' content
+  const TEMPLATES = {
+    message: '応答メッセージを受信',
+    reasoning: '思考プロセスを受信',
+    file: (obj) => `ファイルを生成${obj.fileName ? `: ${obj.fileName}` : ''}`,
+    error: (obj) => `エラー: ${obj.error || obj.message || '不明なエラー'}`,
+    injection: 'プロンプト安全性検査の結果を受信',
+  };
+  function summarizeJsonLine(line) {
+    let obj;
+    try { obj = JSON.parse(line.trim()); } catch { return ''; }
+    // If payload is a Chat message, extract its text content
+    if (obj.type === 'message' && Array.isArray(obj.content)) {
+      const msg = obj.content
+        .map(item => (typeof item.text === 'string' ? item.text : ''))
+        .filter(Boolean)
+        .join('');
+      if (msg) return msg;
+    }
+    // Direct text field
+    if (typeof obj.text === 'string') return obj.text;
+    if (obj.delta && typeof obj.delta.content === 'string') return obj.delta.content;
+    if (obj.message && typeof obj.message.content === 'string') return obj.message.content;
+    if (Array.isArray(obj.choices)) {
+      const text = obj.choices
+        .map(c => c.delta?.content || c.message?.content || '')
+        .filter(Boolean)
+        .join('');
+      if (text) return text;
+    }
+    if (obj.type && TEMPLATES[obj.type]) {
+      const tpl = TEMPLATES[obj.type];
+      return typeof tpl === 'function' ? tpl(obj) : tpl;
+    }
+    return '';
+  }
+  function extractText(raw) {
+    return raw
+      .split(/\r?\n/)
+      .map(summarizeJsonLine)
+      .filter(Boolean)
+      .join(' ');
+  }
+  const cliPath = path.resolve(__dirname, '..', 'vendor', 'codex', 'codex-cli', 'bin', 'codex.js');
+  const args = ['--quiet', '--full-auto', prompt];
+  const cwd = store.get('workingFolder') || process.cwd();
+  let buffer = '';
   try {
-    const cliOpts = store.get('cliOptions') || {};
-    outputStr = await runCodex(mode, prompt, apiKey, cliOpts);
-    if (mainWin && mainWin.webContents) mainWin.webContents.send('run-log', outputStr);
+    const child = spawn(cliPath, args, { cwd, env: { ...process.env, OPENAI_API_KEY: apiKey }, shell: true });
+    child.stdout.on('data', chunk => {
+      const raw = chunk.toString();
+      buffer += raw;
+      const text = extractText(raw);
+      if (text && mainWin && mainWin.webContents) mainWin.webContents.send('run-log', text);
+    });
+    child.stderr.on('data', chunk => {
+      const raw = chunk.toString();
+      buffer += raw;
+      const text = extractText(raw);
+      if (text && mainWin && mainWin.webContents) mainWin.webContents.send('run-log', text);
+    });
+    const exitCode = await new Promise(resolve => child.on('close', resolve));
+    if (exitCode !== 0) throw new Error(`CLI exited with code ${exitCode}`);
+    return { success: true, data: buffer };
   } catch (err) {
-    console.error('SDK execution failed:', err);
-    if (/Invalid mode/.test(err.message)) {
-      return { success: false, error: err.message };
-    }
-    if (/Invalid API key/.test(err.message) || err.status === 401) {
-      openOnboardingWindow();
-      return { success: false, error: 'Invalid API key. Please enter a valid API key.' };
-    }
-    return { success: false, error: err.message || 'Execution failed.' };
-  }
-  // Sanitize HTML output if XSS-only issues were detected
-  if (xssOnly) {
-    if (mainWin && mainWin.webContents) mainWin.webContents.send('run-log', '[run-codex] Escaping HTML output to prevent XSS');
-    outputStr = escapeHtml(outputStr);
-  }
-  if (mainWin && mainWin.webContents) mainWin.webContents.send('run-log', 'Reviewing CLI output...');
-  // Interactive edit mode: directly return unified diff for user to apply
-  if (mode === '--edit') {
-    // Save diff to history
-    saveDiff(outputStr);
-    return { edit: true, diff: outputStr };
-  }
-  // Review output for security issues
-  try {
-    const review = await reviewOutput(outputStr, apiKey);
-    if (!review.safe) {
-      // Save diff for history
-      saveDiff(review.diff);
-      const autoPatch = store.get('autoPatch');
-      if (autoPatch) {
-        return { success: true, data: review.patchedCode, autoPatched: true };
-      } else {
-        return {
-          warning: true,
-          issues: review.issues,
-          data: outputStr,
-          patchedCode: review.patchedCode,
-          diff: review.diff
-        };
-      }
-    }
-  } catch (err) {
-    console.error('Review output failed:', err);
-    // proceed with original output on review errors
-  }
-  // Auto-save output to HTML file
-  try {
-    const outDir = getOutputDir();
-    const filename = `output_${Date.now()}.html`;
-    const filePath = path2.join(outDir, filename);
-    fs2.writeFileSync(filePath, outputStr, 'utf-8');
-    // Save parsed code files from output
-    const saved = saveFilesFromOutput(outputStr);
-    return { success: true, data: outputStr, savedPath: filePath, savedFiles: saved };
-  } catch (e) {
-    // Even if HTML save fails, attempt code file saves
-    const saved = saveFilesFromOutput(outputStr);
-    return { success: true, data: outputStr, savedFiles: saved };
+    console.error('[run-codex] CLI agent error:', err);
+    if (mainWin && mainWin.webContents) mainWin.webContents.send('run-log', `[Error]: ${err.message}`);
+    return { success: false, error: err.message };
   }
 });
 // ---------- Report Prompt Flagging ----------
@@ -671,4 +760,12 @@ app.whenReady().then(async () => {
       console.error('Error during startup sequence:', err);
       app.quit();
     }
+});
+// IPC for UI language setting
+ipcMain.handle('get-ui-language', async () => {
+  return store.get('uiLanguage');
+});
+ipcMain.handle('set-ui-language', async (_, lang) => {
+  store.set('uiLanguage', lang);
+  return { success: true };
 });

@@ -1,28 +1,45 @@
 import React from 'react';
-import { VStack, Box, Text, SlideFade } from '@chakra-ui/react';
+import { VStack } from '@chakra-ui/react';
+import ChatBubble from './ChatBubble';
 
 /**
- * ChatPanel displays a sequence of messages as chat bubbles.
+ * ChatPanel displays a sequence of messages as chat bubbles with collapse/expand.
  * messages: array of { type: 'user' | 'bot', text: string }
  */
-export default function ChatPanel({ messages }) {
+/**
+ * ChatPanel displays a sequence of messages as chat bubbles with collapse/expand.
+ * messages: array of { type: 'user' | 'bot', text: string }
+ */
+/**
+ * ChatPanel displays a sequence of messages as chat bubbles with collapse/expand.
+ * Props:
+ *  - messages: array of { type: 'user' | 'bot', text: string }
+ *  - modelName: string (LLM model name for bot label)
+ *  - uiLanguage: string ('en' or 'ja')
+ */
+export default function ChatPanel({ messages, modelName, uiLanguage }) {
+  // Filter out internal JSON logs without meaningful content
+  const filtered = messages.filter((m) => {
+    try {
+      const obj = JSON.parse(m.text);
+      if (obj.type === 'message') return true;
+      if (obj.type === 'reasoning') return Array.isArray(obj.summary) && obj.summary.length > 0;
+      if (obj.type === 'file') return true;
+      return false;
+    } catch {
+      return true;
+    }
+  });
   return (
     <VStack align="stretch" spacing={3}>
-      {messages.map((m, i) => (
-        <SlideFade in offsetY="10px" key={i}>
-          <Box
-            alignSelf={m.type === 'user' ? 'flex-end' : 'flex-start'}
-            bg={m.type === 'user' ? 'blue.500' : 'gray.200'}
-            color={m.type === 'user' ? 'white' : 'black'}
-            px={3}
-            py={2}
-            borderRadius="md"
-            maxW="80%"
-            whiteSpace="pre-wrap"
-          >
-            <Text>{m.text}</Text>
-          </Box>
-        </SlideFade>
+      {filtered.map((m, i) => (
+        <ChatBubble
+          key={i}
+          type={m.type}
+          text={m.text}
+          modelName={modelName}
+          uiLanguage={uiLanguage}
+        />
       ))}
     </VStack>
   );

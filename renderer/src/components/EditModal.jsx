@@ -1,6 +1,6 @@
 import React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Diff, Hunk, parseDiff } from 'react-diff-viewer-continued';
+import { Diff, Hunk } from 'react-diff-viewer-continued';
 import { Button, VStack, Text, Box } from '@chakra-ui/react';
 import { parsePatch, applyPatch } from 'diff';
 

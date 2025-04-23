@@ -15,6 +15,7 @@ try {
   console.warn('[postinstall] could not check chrome-sandbox:', e.message);
 }
 
+
 if (os.platform() === 'linux') {
   try {
     execSync('dpkg -s libsecret-1-dev', { stdio: 'ignore' });
@@ -26,4 +27,11 @@ if (os.platform() === 'linux') {
       console.warn('⚠️  Auto-install failed; keytar may fail to build:', e.message);
     }
   }
+}
+// Rebuild native modules (e.g., node-pty) for Electron
+try {
+  console.log('[postinstall] Running electron-rebuild for native modules...');
+  execSync('npx electron-rebuild -f -w node-pty', { stdio: 'inherit' });
+} catch (e) {
+  console.warn('[postinstall] electron-rebuild failed:', e.message);
 }

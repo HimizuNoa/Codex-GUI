@@ -15,6 +15,7 @@ import {
   NumberInput,
   NumberInputField,
   Checkbox,
+  Select,
   VStack,
   HStack,
   useToast
@@ -23,6 +24,8 @@ import {
 // Settings modal component using Chakra UI
 const SettingsModal = ({ isOpen, onClose }) => {
   const toast = useToast();
+  // UI language state for selection
+  const [uiLanguage, setUiLanguage] = useState('en');
   const [autoPatch, setAutoPatch] = useState(false);
   const [promptModel, setPromptModel] = useState('');
   const [reviewModel, setReviewModel] = useState('');
@@ -50,6 +53,9 @@ const SettingsModal = ({ isOpen, onClose }) => {
         const models = await window.electron.invoke('get-llm-models') || {};
         setPromptModel(models.promptModel || '');
         setReviewModel(models.reviewModel || '');
+        // Load UI language
+        const lang = await window.electron.getUiLanguage();
+        setUiLanguage(lang);
       } catch (e) {
         console.error('Failed to load settings:', e);
       }
@@ -62,6 +68,10 @@ const SettingsModal = ({ isOpen, onClose }) => {
       await window.electron.invoke('set-cli-options', cliOptions);
       // Save LLM model settings
       await window.electron.invoke('set-llm-models', { promptModel, reviewModel });
+      // Save UI language preference
+      await window.electron.setUiLanguage(uiLanguage);
+      // Notify App to update language context
+      setUiLanguage(uiLanguage);
       toast({ title: 'Settings saved.', status: 'success', duration: 3000, isClosable: true });
       onClose();
     } catch (e) {
@@ -193,6 +203,13 @@ const SettingsModal = ({ isOpen, onClose }) => {
               >
                 <NumberInputField />
               </NumberInput>
+            </FormControl>
+            <FormControl>
+              <FormLabel>Language</FormLabel>
+              <Select value={uiLanguage} onChange={(e) => setUiLanguage(e.target.value)}>
+                <option value="en">English</option>
+                <option value="ja">日本語</option>
+              </Select>
             </FormControl>
           </VStack>
         </ModalBody>
