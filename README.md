@@ -1,4 +1,7 @@
 # Codex GUI
+[![CI](https://github.com/HimizuNoa/Codex-GUI/actions/workflows/ci.yml/badge.svg)](https://github.com/HimizuNoa/Codex-GUI/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![npm version](https://img.shields.io/npm/v/codex-gui.svg)](https://www.npmjs.com/package/codex-gui)
 
 Codex GUI is a desktop application built with Electron and React (using Vite) that provides a graphical interface to the Codex command-line tool and the OpenAI API. It enables you to write prompts, view code diffs, perform security reviews, and manage diff history—all within a modern, cross-platform desktop app.
 
@@ -33,7 +36,7 @@ Codex GUI is a desktop application built with Electron and React (using Vite) th
 ## Installation
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-org/codex-gui.git
+   git clone https://github.com/HimizuNoa/Codex-GUI.git
    cd codex-gui
    ```
 2. Install dependencies:
@@ -104,12 +107,7 @@ Tests are located in the `__tests__` directory.
   ```
 
 ## Contributing
-Contributions are welcome! Please:
-- Fork the repo and create a feature branch.
-- Write tests for new features.
-- Ensure existing tests pass (`npm test`).
-- Follow the existing code style.
-- Submit a pull request describing your changes.
+For detailed contribution guidelines, please see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
