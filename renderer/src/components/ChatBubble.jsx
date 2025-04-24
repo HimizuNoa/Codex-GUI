@@ -27,11 +27,8 @@ const UI_STRINGS = {
  *  - type: 'user' | 'bot'
  *  - text: string
  */
-export default function ChatBubble({ type, text, modelName = '', uiLanguage = 'en' }) {
+export default function ChatBubble({ type, text, modelName = '', uiLanguage = 'en', onFileClick }) {
   const [expanded, setExpanded] = useState(false);
-  // Determine if text should be truncated: more than 5 lines
-  const lines = text.split('\n').length;
-  const shouldTruncate = lines > 5;
 
   // Determine label and display text, handling JSON structures
   let labelKey = type;
@@ -55,6 +52,9 @@ export default function ChatBubble({ type, text, modelName = '', uiLanguage = 'e
   } catch (e) {
     // not JSON, use raw text
   }
+  // Determine if displayText should be truncated: more than 5 lines
+  const displayLines = displayText.split('\n').length;
+  const shouldTruncate = displayLines > 5;
   return (
     <SlideFade in offsetY="10px">
       <Box
@@ -92,9 +92,21 @@ export default function ChatBubble({ type, text, modelName = '', uiLanguage = 'e
             </Text>
           );
         })()}
-        <Text noOfLines={expanded ? undefined : 5}>
-          {displayText}
-        </Text>
+        {labelKey === 'file' && onFileClick ? (
+          <Text
+            as="a"
+            noOfLines={expanded ? undefined : 5}
+            color="blue.500"
+            cursor="pointer"
+            onClick={() => onFileClick(displayText)}
+          >
+            {displayText}
+          </Text>
+        ) : (
+          <Text noOfLines={expanded ? undefined : 5}>
+            {displayText}
+          </Text>
+        )}
         {shouldTruncate && (
           <Button
             size="xs"

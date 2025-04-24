@@ -17,7 +17,7 @@ import ChatBubble from './ChatBubble';
  *  - modelName: string (LLM model name for bot label)
  *  - uiLanguage: string ('en' or 'ja')
  */
-export default function ChatPanel({ messages, modelName, uiLanguage }) {
+export default function ChatPanel({ messages, modelName, uiLanguage, onFileClick }) {
   // Filter out internal JSON logs without meaningful content
   const filtered = messages.filter((m) => {
     try {
@@ -25,6 +25,7 @@ export default function ChatPanel({ messages, modelName, uiLanguage }) {
       if (obj.type === 'message') return true;
       if (obj.type === 'reasoning') return Array.isArray(obj.summary) && obj.summary.length > 0;
       if (obj.type === 'file') return true;
+      if (obj.type === 'function_call_output') return true;
       return false;
     } catch {
       return true;
@@ -39,6 +40,7 @@ export default function ChatPanel({ messages, modelName, uiLanguage }) {
           text={m.text}
           modelName={modelName}
           uiLanguage={uiLanguage}
+          onFileClick={onFileClick}
         />
       ))}
     </VStack>

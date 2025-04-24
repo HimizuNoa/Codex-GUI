@@ -20,6 +20,7 @@ import {
   Textarea as ChakraTextarea,
   Button,
   VStack,
+  Progress,
   useToast,
   Badge,
   Heading,
@@ -139,7 +140,19 @@ function App() {
     onWorkingFolderChanged((folder) => setWorkingFolder(folder));
     // Subscribe to run logs
     // Receive streaming logs from main process (bot messages)
-    onRunLog((msg) => setLogs((prev) => [...prev, { type: 'bot', text: msg }]));
+    onRunLog((msg) => {
+      const text = msg.trim();
+      if (!text) return;
+      // Suppress any pure reasoning markers
+      if (/^思考プロセスを受信(?: 思考プロセスを受信)*$/.test(text)) return;
+      setLogs((prev) => {
+        // Avoid exact duplicates
+        if (prev.length > 0 && prev[prev.length - 1].text === text) {
+          return prev;
+        }
+        return [...prev, { type: 'bot', text }];
+      });
+    });
     // Load UI language preference
     invoke('get-ui-language').then((lang) => setUiLanguage(lang));
     // Load CLI options (model name)
@@ -155,6 +168,19 @@ function App() {
     // Subscribe to interactive CLI prompts
     onCliPrompt((promptText) => setCliPrompt({ text: promptText, isOpen: true }));
   }, []);
+
+  // Show toast notifications on generation start and completion
+  const prevLoadingRef = useRef(false);
+  useEffect(() => {
+    if (!prevLoadingRef.current && loading) {
+      toast({ description: 'Generation started', status: 'info', duration: 2000, isClosable: true });
+    }
+    if (prevLoadingRef.current && !loading) {
+      toast({ description: 'Generation complete', status: 'success', duration: 3000, isClosable: true });
+    }
+    prevLoadingRef.current = loading;
+  }, [loading]);
+  
   // Load prompt history when opening history modal
   useEffect(() => {
     if (showPromptHistory) {
@@ -261,6 +287,8 @@ function App() {
     }
     // Injection detection: ask user via agent
     if (res.injection) {
+      // Display agent guidance in chat
+      setLogs((prev) => [...prev, { type: 'bot', text: res.agentMsg }]);
       setAgentMsg(res.agentMsg);
       setErrorData(res.scan);
       setShowInjection(true);
@@ -272,6 +300,26 @@ function App() {
       return;
     }
     // Success path
+    // Handle generated files saved to workingFolder
+    if (res.savedPaths && res.savedPaths.length > 0) {
+      // Add file-messages for each saved path
+      setLogs((prev) => [
+        ...prev,
+        ...res.savedPaths.map((p) => ({ type: 'bot', text: JSON.stringify({ type: 'file', content: p }) }))
+      ]);
+      // Refresh file list in file browser
+      listFiles().then((list) => setFiles(list));
+      return;
+    }
+    // Legacy single-path support
+    if (res.savedPath) {
+      setLogs((prev) => [
+        ...prev,
+        { type: 'bot', text: JSON.stringify({ type: 'file', content: res.savedPath }) }
+      ]);
+      listFiles().then((list) => setFiles(list));
+      return;
+    }
     if (res.success) {
       setOutput(res.data);
       if (res.autoPatched) toast({ description: '⚠️ Auto‑patch was applied', status: 'warning', duration: 3000, isClosable: true });
@@ -347,10 +395,16 @@ function App() {
       <Grid templateColumns="1fr 2fr 1fr" height="100vh">
       {/* Left sidebar: Chat Panel */}
       <GridItem p={4} overflowY="auto" bg="gray.50" borderRightWidth="1px" borderColor="gray.200">
+        {loading && <Progress size="xs" isIndeterminate colorScheme="blue" mb={2} />}
         <ChatPanel
           messages={logs}
           modelName={cliOptions.model || ''}
           uiLanguage={uiLanguage}
+          // Open files in editor when clicking file messages
+          onFileClick={(file) => {
+            setSelectedFile(file);
+            setOpenTabs((tabs) => tabs.includes(file) ? tabs : [...tabs, file]);
+          }}
         />
       </GridItem>
       <GridItem p={4} overflowY="auto">

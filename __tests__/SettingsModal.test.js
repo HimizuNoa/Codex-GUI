@@ -75,4 +75,40 @@ describe('SettingsModal Integration', () => {
       expect(onClose).toHaveBeenCalled();
     });
   });
+  
+  it('allows editing all CLI options', async () => {
+    const onClose = jest.fn();
+    render(
+      <ChakraProvider>
+        <SettingsModal isOpen={true} onClose={onClose} />
+      </ChakraProvider>
+    );
+    // Wait for settings to load
+    const maxTokensInput = await screen.findByLabelText(/Max Tokens/i);
+    fireEvent.change(maxTokensInput, { target: { value: '20' } });
+    const topPInput = screen.getByLabelText(/Top P/i);
+    fireEvent.change(topPInput, { target: { value: '0.8' } });
+    const nInput = screen.getByLabelText(/N \(completions\)/i);
+    fireEvent.change(nInput, { target: { value: '3' } });
+    const streamSwitch = screen.getByRole('switch', { name: /Stream responses/i });
+    fireEvent.click(streamSwitch);
+    const stopInput = screen.getByPlaceholderText('stop1, stop2');
+    fireEvent.change(stopInput, { target: { value: 'stopA, stopB' } });
+    const logprobsInput = screen.getByLabelText(/Logprobs/i);
+    fireEvent.change(logprobsInput, { target: { value: '5' } });
+    // Save changes
+    const saveButton = screen.getByRole('button', { name: /save/i });
+    fireEvent.click(saveButton);
+    await waitFor(() => {
+      expect(window.electron.invoke).toHaveBeenCalledWith('set-cli-options', expect.objectContaining({
+        max_tokens: 20,
+        top_p: 0.8,
+        n: 3,
+        stream: true,
+        stop: ['stopA', 'stopB'],
+        logprobs: 5
+      }));
+      expect(onClose).toHaveBeenCalled();
+    });
+  });
 });

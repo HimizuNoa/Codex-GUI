@@ -292,3 +292,48 @@
 - 最終的に spawn ベースの CLI 実行を child_process.spawn へ一本化（`stdio: ['inherit','pipe','pipe']` 設定で Ink TUI の Raw-mode エラーを回避）
 - 自動ブロック崩し生成とテストトリガー機能を撤回し、エージェント本来の対話処理に集中
 - 現在は ESM/CJS 互換性、バンドルサイズ、manualChunks 分割などが残課題。次フェーズで検討・対応予定
+### 2025-05-08
+- 完了:
+  * main/index.js の `run-codex` ハンドラを `child_process.spawn` による vendor/codex-cli 実行に完全移行
+  * `node-pty` フォールバックと `electron-rebuild` によるネイティブモジュール再ビルドを確立
+- 副産物:
+  * `services/runCodex.js` の OpenAI SDK 呼び出しルートは現状未使用
+- 残課題:
+  * ChatPanel へのリアルタイムストリーミング最適化（ローディングインジケータ、差分単位の表示）
+  * CLI exit code エラー時のフォールバック処理とモード自動調整
+  * ESM/CJS 互換性問題の解消と CI 上での検証
+  * Vite ビルド設定（manualChunks 最適化、バンドルサイズ削減）
+  * 未使用コード（`services/runCodex.js`）の整理・削除検討
+  * 統合テスト（spawn ベースの `run-codex`、設定 import/export、プロンプト履歴など）の追加
+  * ドキュメント更新（CLI 実行フロー、設定ガイド、開発者向けメモ）
+- 次のステップ:
+  1. run-codex 設定 UI（CLI flags）のテスト追加と動作検証
+  2. `services/runCodex.js` および OpenAI SDK 関連コードの整理・必要に応じた削除
+  3. IPC E2E 統合テストの実装（spawn ベースフロー）
+  4. README と開発者ガイドの最新化
+
+### 2025-05-09
+- A-17: ChatPanel のストリーミング UI 改良を実装完了
+  * indeterminate Progress bar の表示
+  * 生成開始/完了時の toast 通知を追加
+ - 次のステップ:
+   1. run-codex 設定 UI（CLI フラグ）のテスト追加と動作検証
+     - 実装完了: SettingsModal.test.js に全CLIオプションの編集保存テストを追加
+   2. `services/runCodex.js` および未使用の OpenAI SDK 呼び出しコードの整理
+  3. IPC E2E 統合テストの実装（spawn ベースフロー）
+  4. README と開発者ガイドの反映
+
+### 2025-05-10
+- A-18: `services/runCodex.js` を削除し、未使用の OpenAI SDK 呼び出しコードを整理
+  * `services/runCodex.js` を削除
+  * main/index.js、renderer、utils から SDK 呼び出し未使用箇所を確認・整理
+  * README から旧 SDK 実行ルート記述を更新
+  * memory.md に整理完了を記録
+- 完了:
+  * README.md のドキュメント更新を実施
+    - Features セクションに spawn-based flow の説明追加
+-    - Architecture セクションを新規追加
+-    - Project Structure 内 services 説明を更新
+- - 次のステップ:
+  1. IPC E2E 統合テストの実装（spawn ベースフロー）
+  2. 開発者ガイド (CONTRIBUTING.md 等) の追記・整備

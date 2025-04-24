@@ -667,6 +667,16 @@ ipcMain.handle('run-codex', async (_, { prompt, mode, files = [], skipScan = fal
     });
     const exitCode = await new Promise(resolve => child.on('close', resolve));
     if (exitCode !== 0) throw new Error(`CLI exited with code ${exitCode}`);
+    // Save any code-fence blocks as files in workingFolder
+    let savedPaths = [];
+    try {
+      savedPaths = saveFilesFromOutput(buffer);
+    } catch (e) {
+      console.error('Error saving files from output:', e);
+    }
+    if (Array.isArray(savedPaths) && savedPaths.length > 0) {
+      return { success: true, data: buffer, savedPaths };
+    }
     return { success: true, data: buffer };
   } catch (err) {
     console.error('[run-codex] CLI agent error:', err);
